@@ -180,11 +180,18 @@
             box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
             transition: all 0.3s ease;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
 
         .event:hover {
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+        }
+
+        .event-time {
+            font-weight: bold;
         }
 
         .event.work {
@@ -428,11 +435,22 @@
             }
             
             .event {
-                font-size: 8px;
+                font-size: 9px; /* Slightly larger for time */
                 padding: 1px 4px;
                 margin-bottom: 1px;
                 border-radius: 6px;
                 line-height: 1.2;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                max-width: 100%;
+                display: flex;
+                align-items: center;
+                gap: 3px; /* Smaller gap */
+            }
+
+            .event-time {
+                font-size: 8px; /* Smaller time font */
             }
             
             .modal-content {
@@ -510,6 +528,10 @@
                 white-space: nowrap;
                 max-width: 100%;
             }
+
+            .event-time {
+                font-size: 6px;
+            }
         }
 
         /* Landscape orientation for mobile */
@@ -549,11 +571,9 @@
         </div>
         
         <div class="calendar-grid" id="calendarGrid">
-            <!-- Il calendario verrà generato qui -->
-        </div>
+            </div>
     </div>
 
-    <!-- Modal per aggiungere eventi -->
     <div id="eventModal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeModal()">&times;</span>
@@ -566,6 +586,10 @@
                 <div class="form-group">
                     <label for="eventDate">Data:</label>
                     <input type="date" id="eventDate" name="eventDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="eventTime">Ora:</label>
+                    <input type="time" id="eventTime" name="eventTime">
                 </div>
                 <div class="form-group">
                     <label for="eventType">Tipo:</label>
@@ -583,12 +607,13 @@
 
     <script>
         let currentDate = new Date();
-        let events = {
-            '2025-06-05': [{title: 'Riunione Team', type: 'work'}],
-            '2025-06-10': [{title: 'Compleanno Maria', type: 'personal'}],
-            '2025-06-15': [{title: 'Scadenza Progetto', type: 'important'}],
-            '2025-06-20': [{title: 'Dentista', type: 'personal'}],
-            '2025-06-25': [{title: 'Presentazione', type: 'work'}]
+        // Load events from local storage, or use initial data if none
+        let events = JSON.parse(localStorage.getItem('calendarEvents')) || {
+            '2025-06-05': [{title: 'Riunione Team', time: '10:00', type: 'work'}],
+            '2025-06-10': [{title: 'Compleanno Maria', time: '15:30', type: 'personal'}],
+            '2025-06-15': [{title: 'Scadenza Progetto', time: '17:00', type: 'important'}],
+            '2025-06-20': [{title: 'Dentista', time: '09:00', type: 'personal'}],
+            '2025-06-25': [{title: 'Presentazione', time: '14:00', type: 'work'}]
         };
 
         const monthNames = [
@@ -597,6 +622,10 @@
         ];
 
         const dayNames = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+
+        function saveEvents() {
+            localStorage.setItem('calendarEvents', JSON.stringify(events));
+        }
 
         function generateCalendar(date) {
             const year = date.getFullYear();
@@ -644,10 +673,20 @@
                 dayNumber.textContent = cellDate.getDate();
                 dayCell.appendChild(dayNumber);
                 
-                // Aggiungi eventi se presenti
+                // Aggiungi eventi se presenti, ordinandoli per ora
                 const dateStr = cellDate.toISOString().split('T')[0];
                 if (events[dateStr]) {
-                    events[dateStr].forEach((event, index) => {
+                    // Sort events by time
+                    const sortedEvents = [...events[dateStr]].sort((a, b) => {
+                        if (a.time && b.time) {
+                            return a.time.localeCompare(b.time);
+                        }
+                        if (a.time) return -1; // Events with time come first
+                        if (b.time) return 1;
+                        return 0;
+                    });
+
+                    sortedEvents.forEach((event, index) => {
                         // Limita il numero di eventi visibili su mobile
                         if (window.innerWidth <= 480 && index >= 2) {
                             if (index === 2) {
@@ -662,8 +701,19 @@
                         
                         const eventDiv = document.createElement('div');
                         eventDiv.className = `event ${event.type}`;
-                        eventDiv.textContent = event.title;
-                        eventDiv.title = event.title; // Tooltip per eventi troncati
+                        
+                        const eventText = document.createElement('span');
+                        eventText.textContent = event.title;
+                        eventDiv.appendChild(eventText);
+
+                        if (event.time) {
+                            const eventTime = document.createElement('span');
+                            eventTime.className = 'event-time';
+                            eventTime.textContent = event.time;
+                            eventDiv.prepend(eventTime); // Prepend time for visual order
+                        }
+
+                        eventDiv.title = event.time ? `${event.time} - ${event.title}` : event.title; // Tooltip for truncated events
                         dayCell.appendChild(eventDiv);
                     });
                 }
@@ -671,6 +721,7 @@
                 dayCell.onclick = () => selectDate(cellDate);
                 calendarGrid.appendChild(dayCell);
             }
+            saveEvents(); // Save events after generating the calendar
         }
 
         function isToday(date) {
@@ -707,6 +758,7 @@
             
             const title = document.getElementById('eventTitle').value;
             const date = document.getElementById('eventDate').value;
+            const time = document.getElementById('eventTime').value; // Get the time
             const type = document.getElementById('eventType').value;
             
             if (title && date) {
@@ -716,9 +768,11 @@
                 
                 events[date].push({
                     title: title,
+                    time: time, // Include time
                     type: type
                 });
                 
+                saveEvents(); // Save events after adding a new one
                 generateCalendar(currentDate);
                 closeModal();
             }
